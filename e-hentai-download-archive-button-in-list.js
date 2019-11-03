@@ -4,11 +4,48 @@
 // @version      0.1
 // @description  try to take over the world!
 // @author       You
-// @include      /^https?:\/\/e\-hentai\.org\/(uploader\/.*|tag\/[\w]+\:[\w\+]+|\?[\w\=\d\&]+|[\w]+)?$
-// @grant        none
+// @include      /^https?:\/\/e\-hentai\.org\/(uploader\/.*|tag\/[\w]+\:[\w\+]+|\?[\w\=\d\&]+|[\w\-]+)?$
+// @require      https://unpkg.com/dexie@latest/dist/dexie.js
 // ==/UserScript==
 
-function EHentaiDownloadHelperConfig() {
+function EHentaiDownloadHelperCache(parent) {
+    this.parent = parent;
+    this.db = [];
+}
+
+EHentaiDownloadHelperCache.prototype = {
+    dbNames: {
+        galleryCache: 'galleryCache'
+    }
+};
+
+EHentaiDownloadHelperCache.prototype.openGalleryCache = function() {
+    if(typeof this.db[this.dbNames.galleryCache] === "undefined") {
+        this.db[this.dbNames.galleryCache] = new Dexie(this.dbNames.galleryCache);
+        this.db[this.dbNames.galleryCache].version(1).stores({
+            galleries: 'id,token,name,image,metadata',
+            downloads: 'id,downloaded_on'
+        });
+    }
+
+    return this.db[this.dbNames.galleryCache];
+};
+
+EHentaiDownloadHelperCache.prototype.galleryCacheGet = function(galleryid, onsuccess, onerror) {
+    const that = this;
+    const db = this.openGalleryCache();
+    db.galleries.where('id').equals(galleryid).first().then(function(dbentry) {
+        onsuccess(typeof(dbentry) !== "undefined" ? new Gallery(that.parent).fromCache(dbentry) : dbentry);
+    }).catch(onerror);
+};
+
+EHentaiDownloadHelperCache.prototype.galleryCacheSet = function(gallery, onsuccess, onerror) {
+    const db = this.openGalleryCache();
+    db.galleries.put(JSON.parse(JSON.stringify(gallery))).then(onsuccess).catch(onerror);
+};
+
+function EHentaiDownloadHelperConfig(parent) {
+    this.parent = parent;
     this.loadConfig();
 }
 
@@ -63,16 +100,43 @@ EHentaiDownloadHelperConfig.prototype.loadConfig = function () {
     }
 };
 
-
-function EHentaiApiHelper() { }
+function EHentaiApiHelper(parent) {
+    this.parent = parent;
+    this.i = 0;
+}
 
 EHentaiApiHelper.prototype = {};
-EHentaiApiHelper.prototype.config = new EHentaiDownloadHelperConfig();
-
 EHentaiApiHelper.prototype.galleryQueue = [];
 
 EHentaiApiHelper.prototype.addGalleryToMetaQueue = function(gallery) {
-    this.galleryQueue.push(gallery);
+    const that = this;
+    this.lookForGalleryInCache(gallery, function(dbentry) {
+        that.i++;
+        if(typeof(dbentry) === "undefined") {
+            that.galleryQueue.push(gallery);
+        } else {
+            that.parent.galleries[dbentry.id] = dbentry;
+        }
+        if(that.parent.galleryCount === that.i) {
+            that.sendMetaRequest(that);
+        }
+    }, function(error) {
+        that.i++;
+        console.log('DBERROR adding to metaqueue: '+ error);
+        that.galleryQueue.push(gallery);
+        if(that.parent.galleryCount === that.i) {
+            that.sendMetaRequest(that);
+        }
+    });
+};
+
+EHentaiApiHelper.prototype.lookForGalleryInCache = function(gallery, onsuccess, onerror) {
+    this.parent.Cache.galleryCacheGet(gallery.id, function(dbentry) {
+        onsuccess(dbentry);
+    }, function(error) {
+        console.log('[DB Error]: '+error);
+        onerror(error);
+    })
 };
 
 EHentaiApiHelper.prototype.sendMetaRequest = function(that) {
@@ -83,12 +147,12 @@ EHentaiApiHelper.prototype.sendMetaRequest = function(that) {
     const xhr = new XMLHttpRequest();
 
     if(this.galleryQueue.length > 0) {
-        for (i = 0, j = this.galleryQueue.length; i < j; i += this.config.apiConfig.limits.galleries) {
+        for (i = 0, j = this.galleryQueue.length; i < j; i += this.parent.Config.apiConfig.limits.galleries) {
             // @todo add a wait
 
             let apiArray = [];
 
-            this.galleryQueue.slice(i, i + this.config.apiConfig.limits.galleries).forEach(function (item) {
+            this.galleryQueue.slice(i, i + this.parent.Config.apiConfig.limits.galleries).forEach(function (item) {
                 this.push([item.id, item.token]);
             }, apiArray);
 
@@ -101,7 +165,12 @@ EHentaiApiHelper.prototype.sendMetaRequest = function(that) {
                     const data = JSON.parse(this.responseText);
 
                     data.gmetadata.forEach(function (item) {
-                        that.galleries[item.gid].metadata = item;
+                        that.parent.galleries[item.gid].metadata = item;
+                        that.parent.Cache.galleryCacheSet(that.parent.galleries[item.gid], function(event) {
+                            console.log('Stored gallery in database');
+                        }, function(error) {
+                            console.log('DBERROR in API: ' + error);
+                        });
                     }, window.GalleryDownloadHelper);
 
                     console.debug('Loaded metadata for galleries', data.gmetadata.forEach(function (item) {
@@ -118,22 +187,27 @@ EHentaiApiHelper.prototype.sendMetaRequest = function(that) {
     }
 };
 
-
-function Gallery() { }
+function Gallery(parent) {
+    this.parent = parent;
+}
 
 Gallery.prototype = { };
-Gallery.prototype.API = new EHentaiApiHelper();
-Gallery.prototype.fromThumbnailView = function(element) {
-    this.name = element.children[0].children[0].textContent.trim();
-    this.uri = element.children[0].attributes.href.value;
-
-    const extractedData = this.extractDataFromGalleryURI(this.uri);
-    this.id = extractedData.id;
-
-    this.token = extractedData.token;
+Gallery.prototype.fromCache = function(gallery) {
+    this.id = gallery.id;
+    this.token = gallery.token;
+    this.name = gallery.name;
+    this.uri = gallery.uri;
+    this.metadata = gallery.metadata;
     return this;
 };
-
+Gallery.prototype.fromThumbnailView = function(element) {
+    const extractedData = this.extractDataFromGalleryURI(this.uri);
+    this.id = extractedData.id;
+    this.token = extractedData.token;
+    this.name = element.children[0].children[0].textContent.trim();
+    this.uri = element.children[0].attributes.href.value;
+    return this;
+};
 Gallery.prototype.fromListView = function(element) {
     let infoElement = element.getElementsByClassName('gl3m glname')[0].children[0];
     this.name = infoElement.textContent;
@@ -143,18 +217,15 @@ Gallery.prototype.fromListView = function(element) {
     this.token = extractedData.token;
     return this;
 };
-
 Gallery.prototype.downloadArchive = function() {
     if(typeof this.metadata !== "undefined") {
-        popUp(`${this.API.config.archiverUri}?gid=${this.id}&token=${this.token}&or=${this.metadata.archiver_key}`, 480,320);
+        popUp(`${this.parent.Config.archiverUri}?gid=${this.id}&token=${this.token}&or=${this.metadata.archiver_key}`, 480,320);
     }
 };
-
 Gallery.prototype.loadMetadataFromApi = function() {
-    this.API.addGalleryToMetaQueue(this);
-    this.API.sendMetaRequest();
+    this.parent.API.addGalleryToMetaQueue(this);
+    this.parent.API.sendMetaRequest();
 };
-
 Gallery.prototype.extractDataFromGalleryURI = function(uri) {
     function returnObj(uri) {
         const data = uri.match(/https?:\/\/e-hentai\.org\/g\/([0-9]+)\/([0-9a-fA-F]+)\/?/);
@@ -167,18 +238,26 @@ Gallery.prototype.extractDataFromGalleryURI = function(uri) {
 
     return new returnObj(uri);
 };
+Gallery.prototype.toJSON = function() {
+    return {
+        id: this.id,
+        token: this.token,
+        name: this.name,
+        uri: this.uri,
+        metadata: this.metadata
+    }
+};
 
 function GalleryDownloadHelper() {
     console.debug('Initializing GalleryDownloadHelper');
+    this.API = new EHentaiApiHelper(this);
+    this.Config = new EHentaiDownloadHelperConfig(this);
+    this.Cache = new EHentaiDownloadHelperCache(this);
     this.galleries = [];
     this.loadGalleries();
 }
 
-GalleryDownloadHelper.prototype = {
-};
-
-GalleryDownloadHelper.prototype.API = new EHentaiApiHelper();
-
+GalleryDownloadHelper.prototype = { };
 GalleryDownloadHelper.prototype.loadGalleries = function() {
     // Detect if we're in list or thumbnailview
     switch (document.getElementById('dms').children[0].children[0].children[document.getElementById('dms').children[0].children[0].selectedIndex].value) {
@@ -195,40 +274,37 @@ GalleryDownloadHelper.prototype.loadGalleries = function() {
             console.log('This view is not yet supported');
     }
 };
-
 GalleryDownloadHelper.prototype.loadGalleriesFromThumbnailView = function() {
-    const elements = document.getElementsByClassName('gl1t');
-    for (let i=0; i<elements.length; i++) {
-        let gallery = new Gallery().fromThumbnailView(elements[i]);
-        this.galleries[gallery.id] = gallery;
-        this.appendDownloadButtonToThumbnailView(elements[i], gallery);
-    }
-
-    // Fire API call
-    this.API.sendMetaRequest(this);
+    let that = this;
+    this.loopGalleryElements(document.getElementsByClassName('gl1t'), function(element) {
+        let gallery = new Gallery(that).fromThumbnailView(element);
+        that.galleries[gallery.id] = gallery;
+        that.appendDownloadButtonToThumbnailView(element, gallery);
+    });
 };
-
 GalleryDownloadHelper.prototype.addColumnToTableView = function() {
     let table = document.getElementsByClassName('itg gltm')[0];
 
     table.tBodies[0].rows[0].children[3].colSpan = 2;
 };
-
 GalleryDownloadHelper.prototype.loadGalleriesFromListView = function () {
     this.addColumnToTableView();
+    let that = this;
+    const elements = document.getElementsByClassName('itg gltm')[0].children[0].children;
+    elements.shift(); // Remove first element (table header)
 
-    const elements = document.getElementsByClassName('itg gltm')[0].children[0].children
-    console.log(elements.length);
-
-    // i starts from one to skip the header row
-    for (let i=1; i<elements.length; i++) {
-        let gallery = new Gallery().fromListView(elements[i]);
-        this.galleries[gallery.id] = gallery;
-        this.appendDownloadButtonToListView(elements[i], gallery);
-    }
-    this.API.sendMetaRequest(this);
+    this.loopGalleryElements(elements, function(element) {
+        let gallery = new Gallery().fromListView(element);
+        that.galleries[gallery.id] = gallery;
+        that.appendDownloadButtonToListView(element, gallery);
+    });
 };
-
+GalleryDownloadHelper.prototype.loopGalleryElements = function(elements, galleryCreationCallback) {
+    this.galleryCount = elements.length;
+    for(let i=0; i<this.galleryCount; i++) {
+        galleryCreationCallback(elements[i]);
+    }
+};
 GalleryDownloadHelper.prototype.appendDownloadButtonToThumbnailView = function (element, gallery) {
     let target = element.getElementsByClassName('gl6t')[0];
     if(typeof target === "undefined") {
@@ -241,7 +317,6 @@ GalleryDownloadHelper.prototype.appendDownloadButtonToThumbnailView = function (
     target.prepend(this.downloadButtonTemplate(gallery));
     this.API.addGalleryToMetaQueue(gallery);
 };
-
 GalleryDownloadHelper.prototype.appendDownloadButtonToListView = function (element, gallery) {
     let target = element.getElementsByClassName('gl4m')[0];
 
@@ -251,7 +326,6 @@ GalleryDownloadHelper.prototype.appendDownloadButtonToListView = function (eleme
     target.parentElement.insertBefore(column, target);
     this.API.addGalleryToMetaQueue(gallery);
 };
-
 GalleryDownloadHelper.prototype.downloadButtonTemplate = function (gallery) {
     const colors = {
         notDownloaded: {
@@ -266,7 +340,7 @@ GalleryDownloadHelper.prototype.downloadButtonTemplate = function (gallery) {
         }
     };
 
-    let state = this.API.config.isGalleryDownloaded(gallery) ? 'downloaded' : 'notDownloaded';
+    let state = this.Config.isGalleryDownloaded(gallery) ? 'downloaded' : 'notDownloaded';
 
     const button = document.createElement('div');
     button.className = 'gt hack';
@@ -276,10 +350,9 @@ GalleryDownloadHelper.prototype.downloadButtonTemplate = function (gallery) {
 
     return button;
 };
-
 GalleryDownloadHelper.prototype.downloadArchive = function(element) {
     let Gallery = this.galleries[element.attributes['data-id'].value];
-    this.API.config.addGalleryToHistory(Gallery);
+    this.Config.addGalleryToHistory(Gallery);
 
     Gallery.downloadArchive();
 };
