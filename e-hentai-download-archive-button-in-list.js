@@ -26,6 +26,14 @@ EHentaiDownloadHelperCache.prototype.openGalleryCache = function() {
             galleries: 'id,token,name,image,metadata',
             downloads: 'id,downloaded_on'
         });
+        this.db[this.dbNames.galleryCache].version(2).stores({
+            galleries: 'id,token,name,image,metadata,timestamp',
+            downloads: 'id,downloaded_on'
+        }).upgrade(tx => {
+            return tx.galleries.toCollection().modify(gallery => {
+                gallery.timestamp = new Date(Date.now());
+            });
+        });
     }
 
     return this.db[this.dbNames.galleryCache];
@@ -35,7 +43,16 @@ EHentaiDownloadHelperCache.prototype.galleryCacheGet = function(galleryid, onsuc
     const that = this;
     const db = this.openGalleryCache();
     db.galleries.where('id').equals(galleryid).first().then(function(dbentry) {
-        onsuccess(typeof(dbentry) !== "undefined" ? new Gallery(that.parent).fromCache(dbentry) : dbentry);
+        if(typeof(dbentry) !== "undefined") {
+            // Check if cache is expired or not
+            if (new Date(dbentry.timestamp) > new Date(new Date().getTime() - (24 * 60 * 60 * 1000))) {
+                onsuccess(new Gallery(that.parent).fromCache(dbentry));
+                return;
+            } else {
+                console.log('cache expired');
+            }
+        }
+        onsuccess(undefined);
     }).catch(onerror);
 };
 
@@ -198,14 +215,16 @@ Gallery.prototype.fromCache = function(gallery) {
     this.name = gallery.name;
     this.uri = gallery.uri;
     this.metadata = gallery.metadata;
+    this.timestamp = gallery.timestamp;
     return this;
 };
 Gallery.prototype.fromThumbnailView = function(element) {
-    const extractedData = this.extractDataFromGalleryURI(this.uri);
+    const extractedData = this.extractDataFromGalleryURI(element.children[0].attributes.href.value);
     this.id = extractedData.id;
     this.token = extractedData.token;
     this.name = element.children[0].children[0].textContent.trim();
     this.uri = element.children[0].attributes.href.value;
+    this.timestamp = new Date(Date.now());
     return this;
 };
 Gallery.prototype.fromListView = function(element) {
@@ -244,6 +263,7 @@ Gallery.prototype.toJSON = function() {
         token: this.token,
         name: this.name,
         uri: this.uri,
+        timestamp: this.timestamp,
         metadata: this.metadata
     }
 };
