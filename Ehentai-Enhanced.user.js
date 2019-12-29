@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         EHentai-Enhanced
-// @version      1.1.3
+// @version      1.1.4
 // @description  Adds extra stuff to e-hentai.org pages. Uses indexedDB to cache calls/respones made to the EHentai API.
 // @author       PBXg33k
 // @include      /^https?:\/\/e\-hentai\.org\/((uploader\/.*|tag\/[\w]+\:[\w\+]+|\?[\w\=\d\&]+|[\w\-]+)|archiver\.php\?.*)?$
@@ -102,11 +102,12 @@ EHentaiDownloadHelperConfig.prototype.storeConfig = function () {
     window.localStorage.setItem(this.localStorageKey, JSON.stringify(this.localConfig));
 };
 
-EHentaiDownloadHelperConfig.prototype.addGalleryToHistory = function (gallery) {
+EHentaiDownloadHelperConfig.prototype.addGalleryToHistory = function (gallery, callback) {
     if (!this.isGalleryDownloaded(gallery)) {
         this.localConfig.history.push(gallery.id);
         this.storeConfig();
     }
+    callback();
 };
 
 EHentaiDownloadHelperConfig.prototype.isGalleryDownloaded = function (gallery) {
@@ -291,12 +292,12 @@ GalleryDownloadHelper.prototype.autoDownloader = function () {
             // Get galleryId before hitting download (and leaving script env)
             let regExpMatchArray = window.location.href.match(/\?gid=(\d+)/);
             that.Cache.galleryCacheGet(regExpMatchArray[1], function(dbentry) {
-                that.Config.addGalleryToHistory(dbentry);
+                that.Config.addGalleryToHistory(dbentry, function() {
+                    if(el.value == "Download Original Archive") {
+                        el.click();
+                    }
+                });
             });
-
-            if(el.value == "Download Original Archive") {
-                el.click();
-            }
         });
     }
 };
