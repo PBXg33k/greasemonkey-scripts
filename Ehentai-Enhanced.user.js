@@ -3,7 +3,7 @@
 // @version      1.0.2
 // @description  Adds extra stuff to e-hentai.org pages. Uses indexedDB to cache calls/respones made to the EHentai API.
 // @author       PBXg33k
-// @include      /^https?:\/\/e\-hentai\.org\/(uploader\/.*|tag\/[\w]+\:[\w\+]+|\?[\w\=\d\&]+|[\w\-]+)?$
+// @include      /^https?:\/\/e\-hentai\.org\/((uploader\/.*|tag\/[\w]+\:[\w\+]+|\?[\w\=\d\&]+|[\w\-]+)|archiver\.php\?.*)?$
 // @require      https://unpkg.com/dexie@latest/dist/dexie.js
 // @updateURL    https://openuserjs.org/meta/PBXg33k/EHentai-Enhanced.meta.js
 // @copyright    2019, PBXg33k (https://openuserjs.org/users/PBXg33k)
@@ -270,10 +270,34 @@ function GalleryDownloadHelper() {
     this.Config = new EHentaiDownloadHelperConfig(this);
     this.Cache = new EHentaiDownloadHelperCache(this);
     this.galleries = [];
-    this.loadGalleries();
+    this.init();
 }
 
 GalleryDownloadHelper.prototype = {};
+GalleryDownloadHelper.prototype.init = function () {
+    // Check if we're browsing the site or trying to download a gallery
+    if(window.location.href.indexOf('archiver.php?') === -1) {
+        this.loadGalleries();
+    } else {
+        this.autoDownloader();
+    }
+};
+GalleryDownloadHelper.prototype.autoDownloader = function () {
+    if(document.getElementsByTagName('strong')[0].textContent.trim() == 'Free!') {
+        const that = this;
+        document.getElementsByName('dlcheck').forEach(function(el) {
+            // Get galleryId before hitting download (and leaving script env)
+            let regExpMatchArray = window.location.href.match(/\?gid=(\d+)/);
+            that.Cache.galleryCacheGet(regExpMatchArray[1], function(dbentry) {
+                that.Config.addGalleryToHistory(Gallery);
+            });
+
+            if(el.value == "Download Original Archive") {
+                el.click();
+            }
+        });
+    }
+};
 GalleryDownloadHelper.prototype.loadGalleries = function () {
     // Detect if we're in list or thumbnailview
     switch (document.getElementById('dms').children[0].children[0].children[document.getElementById('dms').children[0].children[0].selectedIndex].value) {
