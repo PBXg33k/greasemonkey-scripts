@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         EHentai-Enhanced
-// @version      1.1.1
+// @version      1.1.2
 // @description  Adds extra stuff to e-hentai.org pages. Uses indexedDB to cache calls/respones made to the EHentai API.
 // @author       PBXg33k
 // @include      /^https?:\/\/e\-hentai\.org\/((uploader\/.*|tag\/[\w]+\:[\w\+]+|\?[\w\=\d\&]+|[\w\-]+)|archiver\.php\?.*)?$
@@ -396,7 +396,6 @@ GalleryDownloadHelper.prototype.downloadButtonTemplate = function (gallery) {
 };
 GalleryDownloadHelper.prototype.downloadArchive = function (element) {
     let Gallery = this.galleries[element.attributes['data-id'].value];
-    this.Config.addGalleryToHistory(Gallery);
 
     Gallery.downloadArchive();
 };
