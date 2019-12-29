@@ -316,6 +316,8 @@ GalleryDownloadHelper.prototype.loadGalleries = function () {
         default:
             console.log('This view is not yet supported');
     }
+
+    this.setStorageEventListeners();
 };
 GalleryDownloadHelper.prototype.loadGalleriesFromThumbnailView = function () {
     let that = this;
@@ -370,6 +372,15 @@ GalleryDownloadHelper.prototype.appendDownloadButtonToListView = function (eleme
     this.API.addGalleryToMetaQueue(gallery);
 };
 GalleryDownloadHelper.prototype.downloadButtonTemplate = function (gallery) {
+    const button = document.createElement('div');
+    button.className = 'gt hack';
+    button.gallery = gallery;
+
+    this.setDownloadStateStyle(button, gallery.id, this.Config.isGalleryDownloaded(gallery));
+
+    return button;
+};
+GalleryDownloadHelper.prototype.setDownloadStateStyle = function (element, id, downloaded) {
     const colors = {
         notDownloaded: {
             color: '#f1f1f1',
@@ -385,15 +396,45 @@ GalleryDownloadHelper.prototype.downloadButtonTemplate = function (gallery) {
         }
     };
 
-    let state = this.Config.isGalleryDownloaded(gallery) ? 'downloaded' : 'notDownloaded';
+    let state = downloaded === true ? 'downloaded' : 'notDownloaded';
 
-    const button = document.createElement('div');
-    button.className = 'gt hack';
-    button.style = `border-color: ${colors[state].border};background: radial-gradient(${colors[state].gradient}) !important; text-align: center`;
-    button.innerHTML = `<a href="#" style="color:${colors[state].color}" data-id="${gallery.id}" onclick="GalleryDownloadHelper.downloadArchive(this); return false" >${colors[state].text}</a>`;
-    button.gallery = gallery;
+    element.style = `border-color: ${colors[state].border};background: radial-gradient(${colors[state].gradient}) !important; text-align: center`;
+    element.innerHTML = `<a href="#" style="color:${colors[state].color}" data-id="${id}" onclick="GalleryDownloadHelper.downloadArchive(this); return false" >${colors[state].text}</a>`;
+};
+GalleryDownloadHelper.prototype.setStorageEventListeners = function () {
+    let that = this;
 
-    return button;
+    window.addEventListener('storage', function (e) {
+        if(e.key === "EhentaiDownloadHelper") {
+            that.arrayDiff(JSON.parse(e.oldValue).history, JSON.parse(e.newValue).history).forEach(function(element) {
+                document.querySelectorAll("[data-id=\""+element+"\"]").forEach(function(el) {
+                    that.setDownloadStateStyle(el.parentElement, element, true);
+                })
+            })
+        }
+    });
+};
+// Credit https://stackoverflow.com/a/1187628/1665706
+GalleryDownloadHelper.prototype.arrayDiff = function (a1, a2) {
+    var a = [], diff = [];
+
+    for (var i = 0; i < a1.length; i++) {
+        a[a1[i]] = true;
+    }
+
+    for (var i = 0; i < a2.length; i++) {
+        if (a[a2[i]]) {
+            delete a[a2[i]];
+        } else {
+            a[a2[i]] = true;
+        }
+    }
+
+    for (var k in a) {
+        diff.push(k);
+    }
+
+    return diff;
 };
 GalleryDownloadHelper.prototype.downloadArchive = function (element) {
     let Gallery = this.galleries[element.attributes['data-id'].value];
