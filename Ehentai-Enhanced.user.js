@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         EHentai-Enhanced
-// @version      1.0.2
+// @version      1.1.0
 // @description  Adds extra stuff to e-hentai.org pages. Uses indexedDB to cache calls/respones made to the EHentai API.
 // @author       PBXg33k
 // @include      /^https?:\/\/e\-hentai\.org\/((uploader\/.*|tag\/[\w]+\:[\w\+]+|\?[\w\=\d\&]+|[\w\-]+)|archiver\.php\?.*)?$
