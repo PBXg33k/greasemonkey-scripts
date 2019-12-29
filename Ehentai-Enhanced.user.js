@@ -6,6 +6,7 @@
 // @author       You
 // @include      /^https?:\/\/e\-hentai\.org\/(uploader\/.*|tag\/[\w]+\:[\w\+]+|\?[\w\=\d\&]+|[\w]+)?$
 // @grant        none
+// @license GPL-3.0-or-later; https://www.gnu.org/licenses/gpl-3.0.txt
 // ==/UserScript==
 
 function EHentaiDownloadHelperConfig() {
