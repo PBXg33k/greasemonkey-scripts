@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         EHentai-Enhanced
-// @version      1.1.8
+// @version      1.1.9
 // @description  Adds extra stuff to e-hentai.org pages. Uses indexedDB to cache calls/respones made to the EHentai API.
 // @author       PBXg33k
 // @match        https://e-hentai.org/uploader/*
@@ -290,20 +290,39 @@ GalleryDownloadHelper.prototype.init = function () {
     }
 };
 GalleryDownloadHelper.prototype.autoDownloader = function () {
-    if(document.getElementsByTagName('strong')[0].textContent.trim() == 'Free!') {
-        const that = this;
+    const that = this;
+    if(document.getElementsByTagName('strong')[0].textContent.trim() === 'Free!') {
         document.getElementsByName('dlcheck').forEach(function(el) {
             // Get galleryId before hitting download (and leaving script env)
-            let regExpMatchArray = window.location.href.match(/\?gid=(\d+)/);
-            that.Cache.galleryCacheGet(regExpMatchArray[1], function(dbentry) {
+            that.Cache.galleryCacheGet(that.getGalleryIdFromArchiverUrl(window.location.href), function(dbentry) {
                 that.Config.addGalleryToHistory(dbentry, function() {
-                    if(el.value == "Download Original Archive") {
+                    if(el.value === "Download Original Archive") {
                         el.click();
                     }
                 });
             });
         });
+    } else {
+        let galleryMarked = false;
+        // Override submit buttons to update download state
+        document.getElementsByName('dlcheck').forEach(function (el) {
+            el.form.onsubmit = function(event) {
+                if(!galleryMarked) {
+                    event.preventDefault();
+                    that.Cache.galleryCacheGet(that.getGalleryIdFromArchiverUrl(window.location.href), function (dbentry) {
+                        that.Config.addGalleryToHistory(dbentry, function () {
+                            galleryMarked = true;
+                            el.click();
+                        });
+                    });
+                }
+            };
+        });
     }
+};
+GalleryDownloadHelper.prototype.getGalleryIdFromArchiverUrl = function(url) {
+    let regExpMatchArray = url.match(/\?gid=(\d+)/);
+    return regExpMatchArray[1];
 };
 GalleryDownloadHelper.prototype.loadGalleries = function () {
     // Detect if we're in list or thumbnailview
