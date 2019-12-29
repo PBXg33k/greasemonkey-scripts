@@ -48,8 +48,6 @@ EHentaiDownloadHelperCache.prototype.galleryCacheGet = function(galleryid, onsuc
             if (new Date(dbentry.timestamp) > new Date(new Date().getTime() - (24 * 60 * 60 * 1000))) {
                 onsuccess(new Gallery(that.parent).fromCache(dbentry));
                 return;
-            } else {
-                console.log('cache expired');
             }
         }
         onsuccess(undefined);
@@ -183,15 +181,10 @@ EHentaiApiHelper.prototype.sendMetaRequest = function(that) {
 
                     data.gmetadata.forEach(function (item) {
                         that.parent.galleries[item.gid].metadata = item;
-                        that.parent.Cache.galleryCacheSet(that.parent.galleries[item.gid], function(event) {
-                            console.log('Stored gallery in database');
-                        }, function(error) {
+                        that.parent.Cache.galleryCacheSet(that.parent.galleries[item.gid], function(event) {}, function(error) {
                             console.log('DBERROR in API: ' + error);
                         });
                     }, window.GalleryDownloadHelper);
-
-                    console.debug('Loaded metadata for galleries', data.gmetadata.forEach(function (item) {
-                    }))
                 }
             };
             xhr.send(JSON.stringify({
@@ -351,12 +344,14 @@ GalleryDownloadHelper.prototype.downloadButtonTemplate = function (gallery) {
         notDownloaded: {
             color: '#f1f1f1',
             border: '#dd13df',
-            gradient: '#dd13df,#d954da'
+            gradient: '#dd13df,#d954da',
+            text: 'Download Archive'
         },
         downloaded: {
             color: '#000000',
             border: '#1edf13',
-            gradient: '#1edf13,#5cda54'
+            gradient: '#1edf13,#5cda54',
+            text: 'Downloaded'
         }
     };
 
@@ -365,7 +360,7 @@ GalleryDownloadHelper.prototype.downloadButtonTemplate = function (gallery) {
     const button = document.createElement('div');
     button.className = 'gt hack';
     button.style = `border-color: ${colors[state].border};background: radial-gradient(${colors[state].gradient}) !important; text-align: center`;
-    button.innerHTML = `<a href="#" style="color:${colors[state].color}" data-id="${gallery.id}" onclick="GalleryDownloadHelper.downloadArchive(this); return false" >Download Archive</a>`;
+    button.innerHTML = `<a href="#" style="color:${colors[state].color}" data-id="${gallery.id}" onclick="GalleryDownloadHelper.downloadArchive(this); return false" >${colors[state].text}</a>`;
     button.gallery = gallery;
 
     return button;
