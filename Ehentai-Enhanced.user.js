@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         EHentai-Enhanced
-// @version      1.1.9
+// @version      1.1.10
 // @description  Adds extra stuff to e-hentai.org pages. Uses indexedDB to cache calls/respones made to the EHentai API.
 // @author       PBXg33k
 // @match        https://e-hentai.org/uploader/*
 // @match        https://e-hentai.org/tag/*
 // @match        https://e-hentai.org/archiver.php*
 // @match        https://e-hentai.org/?f_search=*
-// @include      /^https?:\/\/e\-hentai\.org\/((\?[\w\=\d\&]+|[\w\-]+)(\/[\d+]?)?(\?.*)?)?$
+// @include      /^https?:\/\/e\-hentai\.org\/((\?[\w\=\d\&\:\%\+]+|[\w\-]+)(\/[\d+]?)?(\?.*)?)?$
 // @require      https://unpkg.com/dexie@latest/dist/dexie.js
 // @updateURL    https://openuserjs.org/meta/PBXg33k/EHentai-Enhanced.meta.js
 // @supportURL   https://github.com/PBXg33k/greasemonkey-scripts/issues
