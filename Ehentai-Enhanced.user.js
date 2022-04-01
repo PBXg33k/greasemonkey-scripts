@@ -6,6 +6,7 @@
 // @match        https://e-hentai.org/uploader/*
 // @match        https://e-hentai.org/tag/*
 // @match        https://e-hentai.org/archiver.php*
+// @match        https://e-hentai.org/exchange.php*
 // @match        https://e-hentai.org/?f_search=*
 // @include      /^https?:\/\/e\-hentai\.org\/((\?[\w\=\d\&\:\%\+]+|[\w\-]+)(\/[\d+]?)?(\?.*)?)?$
 // @require      https://unpkg.com/dexie@latest/dist/dexie.js
@@ -271,11 +272,96 @@ Gallery.prototype.toJSON = function () {
     }
 };
 
+function EHExchange(parent) {
+    console.debug('Initializing EHExchange');
+    this.parent = parent;
+}
+
+EHExchange.prototype = {};
+EHExchange.prototype.init = function() {
+    this.addCalculationsToPage(
+        this.calculateBuySellOptions(
+            this.getAvailable(),
+            this.loadPrices()
+        )
+    )
+}
+
+EHExchange.prototype.getAvailable = function() {
+    return {
+        credits: this.getPriceNumericValue(document.querySelector("body > div.stuffbox > div:nth-child(3) > div:nth-child(1) > div:nth-child(3)").innerText),
+        secondcurrency: this.getPriceNumericValue(document.querySelector("body > div.stuffbox > div:nth-child(3) > div:nth-child(2) > div:nth-child(3)").innerText),
+    }
+}
+
+EHExchange.prototype.loadPrices = function() {
+    return {
+        low: this.getPriceNumericValue(document.querySelector("body > div.stuffbox > div:nth-child(4) > div:nth-child(1) > div:nth-child(2) > table > tbody > tr:nth-child(1) > td:nth-child(3)").innerText),
+        high: this.getPriceNumericValue(document.querySelector("body > div.stuffbox > div:nth-child(4) > div:nth-child(1) > div:nth-child(3) > table > tbody > tr:nth-child(1) > td:nth-child(3)").innerText)
+    }
+}
+
+EHExchange.prototype.calculateBuySellOptions = function(available, prices) {
+    return {
+        buy: {
+            low: {
+                amount: Math.floor(available.credits / prices.low),
+                price: prices.low
+            },
+            high: {
+                amount: Math.floor(available.credits / prices.high),
+                price: prices.high
+            }
+        },
+        sell: {
+            low: {
+                amount: available.secondcurrency,
+                price: prices.low,
+                totalprofit: available.secondcurrency * prices.low
+            },
+            high: {
+                amount: available.secondcurrency,
+                price: prices.high,
+                totalprofit: available.secondcurrency * prices.high
+            },
+        }
+    }
+}
+
+EHExchange.prototype.getPriceNumericValue = function(text) {
+    regex = /.*?([\d,]+)\s.*/;
+    return parseInt(text.match(regex)[1].replace(',',''));
+}
+
+EHExchange.prototype.addCalculationsToPage = function(calculations) {
+
+    buyClass = document.createElement('div')
+    buyClass.innerHTML = "<div style='margin-top:5px; font-weight:bold'><div style='display grid; width: 50%; float: left;'>Buy " + 
+    calculations.buy.low.amount + " @ " + 
+    calculations.buy.low.price + "</div><div style='display grid; width: 50%; float: left;'>Buy " +
+    calculations.buy.high.amount + " @ " + 
+    calculations.buy.high.price + " Credits</div></div>"
+
+    sellClass = document.createElement('div');
+    sellClass.innerHTML = "<div style='margin-top:5px; font-weight:bold'><div style='display grid; width: 50%; float: left;'>Sell " + 
+    calculations.sell.low.amount + " @ " + 
+    calculations.sell.low.price + " Credits(" +
+    calculations.sell.low.totalprofit + ")</div><div style='display grid; width: 50%; float: left;'>Sell " +
+    calculations.sell.high.amount + " @ " + 
+    calculations.sell.high.price + " Credits (" +
+    calculations.sell.high.totalprofit + ")</div></div>"
+
+    // Inject templates
+    document.querySelector("body > div.stuffbox > div:nth-child(3) > div:nth-child(1) > div:nth-child(3)").appendChild(buyClass);
+    document.querySelector("body > div.stuffbox > div:nth-child(3) > div:nth-child(2) > div:nth-child(3)").appendChild(sellClass);
+}
+
 function GalleryDownloadHelper() {
     console.debug('Initializing GalleryDownloadHelper');
     this.API = new EHentaiApiHelper(this);
     this.Config = new EHentaiDownloadHelperConfig(this);
     this.Cache = new EHentaiDownloadHelperCache(this);
+    this.EHExchange = new EHExchange(this);
     this.galleries = [];
     this.init();
 }
@@ -283,10 +369,12 @@ function GalleryDownloadHelper() {
 GalleryDownloadHelper.prototype = {};
 GalleryDownloadHelper.prototype.init = function () {
     // Check if we're browsing the site or trying to download a gallery
-    if(window.location.href.indexOf('archiver.php?') === -1) {
-        this.loadGalleries();
-    } else {
+    if(window.location.href.indexOf('archiver.php?') != -1) {
         this.autoDownloader();
+    } else if (window.location.href.indexOf('exchange.php') != -1) {
+        this.EHExchange.init();
+    } else {
+        this.loadGalleries();
     }
 };
 GalleryDownloadHelper.prototype.autoDownloader = function () {
