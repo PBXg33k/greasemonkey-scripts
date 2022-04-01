@@ -11,7 +11,6 @@
 // @include      /^https?:\/\/e\-hentai\.org\/((\?[\w\=\d\&\:\%\+]+|[\w\-]+)(\/[\d+]?)?(\?.*)?)?$
 // @require      https://unpkg.com/dexie@latest/dist/dexie.js
 // @updateURL    https://openuserjs.org/meta/PBXg33k/EHentai-Enhanced.meta.js
-// @downloadURL  https://openuserjs.org/install/PBXg33k/EHentai-Enhanced.user.js
 // @supportURL   https://github.com/PBXg33k/greasemonkey-scripts/issues
 // @website      https://github.com/PBXg33k/greasemonkey-scripts
 // @copyright    2019-2022, PBXg33k (https://openuserjs.org/users/PBXg33k)
