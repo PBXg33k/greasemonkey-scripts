@@ -375,8 +375,17 @@ EHExchange.prototype.generatePriceInnerBlock = function(calculation, action) {
 
     element.innerText = action + " " + calculation.amount + " @ " + calculation.price + " C";
 
-    if(action === "sell") {
-        element.innerText = element.innerText + " (" + calculation.totalprofit + " C)"
+    if(action === "buy") {
+        element.onclick = function() {
+            document.getElementById('bid_count').value = calculation.amount.toString();
+            document.getElementById('bid_price').value = calculation.price.toString();
+        }
+    } else if(action === "sell") {
+        element.innerText = element.innerText + " (" + calculation.totalprofit + " C)";
+        element.onclick = function() {
+            document.getElementById('ask_count').value = calculation.amount.toString();
+            document.getElementById('ask_price').value = calculation.price.toString();
+        }
     }
 
     return element;
