@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         EHentai-Enhanced
-// @version      1.2.1
+// @version      1.2.2
 // @description  Adds extra stuff to e-hentai.org pages. Uses indexedDB to cache calls/respones made to the EHentai API.
 // @author       PBXg33k
 // @match        https://e-hentai.org/uploader/*
@@ -309,9 +309,17 @@ EHExchange.prototype.calculateBuySellOptions = function(available, prices) {
                 amount: Math.floor(available.credits / prices.low),
                 price: prices.low
             },
+            low_overbid: {
+                amount: Math.floor(available.credits / ( prices.low + 1 )),
+                price: prices.low + 1
+            },
             high: {
                 amount: Math.floor(available.credits / prices.high),
                 price: prices.high
+            },
+            high_underprice: {
+                amount: Math.floor(available.credits / (prices.high - 1 )),
+                price: prices.high - 1
             }
         },
         sell: {
@@ -320,41 +328,59 @@ EHExchange.prototype.calculateBuySellOptions = function(available, prices) {
                 price: prices.low,
                 totalprofit: available.secondcurrency * prices.low
             },
+            low_overbid: {
+                amount: available.secondcurrency,
+                price: prices.low + 1,
+                totalprofit: available.secondcurrency * (prices.low + 1)
+            },
             high: {
                 amount: available.secondcurrency,
                 price: prices.high,
                 totalprofit: available.secondcurrency * prices.high
             },
+            high_underprice: {
+                amount: available.secondcurrency,
+                price: prices.high - 1,
+                totalprofit: available.secondcurrency * (prices.high - 1)
+            }
         }
     }
 }
 
 EHExchange.prototype.getPriceNumericValue = function(text) {
     regex = /.*?([\d,]+)\s.*/;
-    return parseInt(text.match(regex)[1].replace(',',''));
+    return parseInt(text.match(regex)[1].replace(/\,/g,''));
 }
 
 EHExchange.prototype.addCalculationsToPage = function(calculations) {
+    document.querySelector("body > div.stuffbox > div:nth-child(3) > div:nth-child(1)").append(this.generatePriceBlock(calculations,'buy'));
+    document.querySelector("body > div.stuffbox > div:nth-child(3) > div:nth-child(2)").append(this.generatePriceBlock(calculations, 'sell'));
+}
 
-    buyClass = document.createElement('div')
-    buyClass.innerHTML = "<div style='margin-top:5px; font-weight:bold'><div style='display grid; width: 50%; float: left;'>Buy " + 
-    calculations.buy.low.amount + " @ " + 
-    calculations.buy.low.price + "</div><div style='display grid; width: 50%; float: left;'>Buy " +
-    calculations.buy.high.amount + " @ " + 
-    calculations.buy.high.price + " Credits</div></div>"
+EHExchange.prototype.generatePriceBlock = function(prices, action) {
+    documentFragment = document.createDocumentFragment();
+    
+    documentFragment.appendChild(this.generatePriceInnerBlock(prices[action].low, action));
+    documentFragment.appendChild(this.generatePriceInnerBlock(prices[action].high, action));
+    documentFragment.appendChild(this.generatePriceInnerBlock(prices[action].low_overbid, action));
+    documentFragment.appendChild(this.generatePriceInnerBlock(prices[action].high_underprice, action));
 
-    sellClass = document.createElement('div');
-    sellClass.innerHTML = "<div style='margin-top:5px; font-weight:bold'><div style='display grid; width: 50%; float: left;'>Sell " + 
-    calculations.sell.low.amount + " @ " + 
-    calculations.sell.low.price + " Credits(" +
-    calculations.sell.low.totalprofit + ")</div><div style='display grid; width: 50%; float: left;'>Sell " +
-    calculations.sell.high.amount + " @ " + 
-    calculations.sell.high.price + " Credits (" +
-    calculations.sell.high.totalprofit + ")</div></div>"
+    return documentFragment;
+}
 
-    // Inject templates
-    document.querySelector("body > div.stuffbox > div:nth-child(3) > div:nth-child(1) > div:nth-child(3)").appendChild(buyClass);
-    document.querySelector("body > div.stuffbox > div:nth-child(3) > div:nth-child(2) > div:nth-child(3)").appendChild(sellClass);
+EHExchange.prototype.generatePriceInnerBlock = function(calculation, action) {
+    element = document.createElement('div');
+    element.style.display = 'grid';
+    element.style.width = '50%';
+    element.style.float = 'left';
+
+    element.innerText = action + " " + calculation.amount + " @ " + calculation.price + " C";
+
+    if(action === "sell") {
+        element.innerText = element.innerText + " (" + calculation.totalprofit + " C)"
+    }
+
+    return element;
 }
 
 function GalleryDownloadHelper() {
