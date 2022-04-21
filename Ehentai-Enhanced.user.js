@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         EHentai-Enhanced
-// @version      1.2.3
+// @version      1.2.4
 // @description  Adds extra stuff to e-hentai.org pages. Uses indexedDB to cache calls/respones made to the EHentai API.
 // @author       PBXg33k
 // @match        https://e-hentai.org/uploader/*
 // @match        https://e-hentai.org/tag/*
 // @match        https://e-hentai.org/archiver.php*
 // @match        https://e-hentai.org/exchange.php*
-// @match        https://e-hentai.org/?f_search=*
+// @match        https://e-hentai.org/*
 // @include      /^https?:\/\/e\-hentai\.org\/((\?[\w\=\d\&\:\%\+]+|[\w\-]+)(\/[\d+]?)?(\?.*)?)?$
 // @require      https://unpkg.com/dexie@latest/dist/dexie.js
 // @updateURL    https://openuserjs.org/meta/PBXg33k/EHentai-Enhanced.meta.js
@@ -16,6 +16,7 @@
 // @copyright    2019-2022, PBXg33k (https://openuserjs.org/users/PBXg33k)
 // @license      MIT
 // ==/UserScript==
+// @todo         - Load userId from session to enable/disable features
 
 function EHentaiDownloadHelperCache(parent) {
     this.parent = parent;
@@ -88,6 +89,9 @@ EHentaiDownloadHelperConfig.prototype = {
         requestQueue: [],
         lastCallTimestamp: null,
         history: []
+    },
+    cloudFlare: {
+        enabled: false,
     }
 };
 
@@ -106,6 +110,27 @@ EHentaiDownloadHelperConfig.prototype.getRequestFromQueue = function () {
 EHentaiDownloadHelperConfig.prototype.storeConfig = function () {
     window.localStorage.setItem(this.localStorageKey, JSON.stringify(this.localConfig));
 };
+
+EHentaiDownloadHelperConfig.prototype.loadDownloadedGalleriesFromCF = function() {
+    let that = this;
+    async function getJSON(url) {
+        const response = await fetch(url);
+        return response.json();
+    }
+
+    getJSON("https://gallery-file-lookup.pbxg33k.workers.dev/").then(data => {
+
+        console.log(data.results);
+        data.result.forEach(gallery => {
+            //console.log(gallery.gid);
+            if(!this.isGalleryDownloaded({id: gallery.gid})) {
+                this.addGalleryToHistory({id: gallery.gid.toString()}, function() {
+                    console.log('Added gallery from CF to db');
+                });
+            }
+        });
+    });
+}
 
 EHentaiDownloadHelperConfig.prototype.addGalleryToHistory = function (gallery, callback) {
     if (!this.isGalleryDownloaded(gallery)) {
@@ -461,6 +486,10 @@ GalleryDownloadHelper.prototype.loadGalleries = function () {
         case 'e': // Extended
         default:
             console.log('This view is not yet supported');
+    }
+
+    if(this.Config.cloudFlare.enabled) {
+        this.Config.loadDownloadedGalleriesFromCF();
     }
 
     this.setStorageEventListeners();
